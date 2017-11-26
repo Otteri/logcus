@@ -1,4 +1,4 @@
-SRC_FILES=main.c
+SRC_FILES=main.c logcus.c
 
 all: main
 
