@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE 700 //getline
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,6 +9,7 @@
 #include <fcntl.h> //open()
 #include <sys/stat.h> //O_WRONLY
 #include <signal.h>
+#include <errno.h>
 
 
 int fd;
@@ -35,14 +37,42 @@ int close_logcus() {
 }
 
 
+int check_logcus() {
+/* Checks current status of daemon process.
+ * pid.tmp should exists only if daemon is alive.
+ * However, it is possible that unclean exits hasn't wiped the file, so
+ * it is better to check that process with the id really does exists
+ */
+	FILE * pid_file = NULL;
+	char * line = NULL;
+	size_t len = 0;
+
+ 	pid_file = fopen ("/tmp/pid.txt", "r");
+	if(pid_file == NULL) {
+		printf("ERROR! cannot open pid.tmp");
+	}
+	getline(&line, &len, pid_file);
+	int pid = atoi(line);
+	printf("%s", line);
+	if(kill(pid, 0) == 0){
+		//process exists
+		printf("process exists\n");
+	} else if(errno == ESRCH) {
+		printf("daemon does not exist\n");
+	} else {
+		printf("error!\n");
+	}
+
+	return(EXIT_SUCCESS);
+}
+
+
+
 /* Init forks a child process. The parent returns and continues executing
  * its own code, if child was created succesfully. The child forks another child
  * (lapsenlapsi) and then gets killed, so the grandchild gets detached thus
  * making a new daemon process.
  */
-
-
-
 
 int init_logcus() {
 	FILE *fp= NULL;
@@ -65,7 +95,7 @@ int init_logcus() {
 		if (process_id2 > 0) {
 			/* Orphanate/detach grandchild by killing its parent.*/
 			printf("This process is becoming a daemon: %d \n", process_id2); //daemon PID
-			FILE *file_open = fopen("pid.tmp", "w+");
+			FILE *file_open = fopen("/tmp/pid.txt", "w+");
 			fprintf(file_open, "%d\n", process_id2);
 			fclose(file_open);
 			exit(EXIT_SUCCESS);
@@ -112,8 +142,8 @@ int init_logcus() {
 		}
 		fprintf(fp, "closing!\n");
 		fclose(fp);
-		remove("pid.tmp");
-		close(fd);
+		remove("/tmp/pid.tmp");
+		close(fd); //close fifo
 		return(EXIT_SUCCESS);
 	}
 	else {
