@@ -1,4 +1,5 @@
 SRC_FILES=main.c logcus.c
+SRC_FILES2=test.c logcus.c
 
 all: main
 
@@ -11,3 +12,6 @@ clean:
 
 memcheck:
 	valgrind --leak-check=full ./main example.c
+
+test: $(SRC_FILES2)
+	gcc -g -Wall -Wextra -pedantic -std=c99 -o $@ $(SRC_FILES2) -lm

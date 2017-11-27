@@ -7,20 +7,32 @@
 #include <assert.h> //assert
 #include <fcntl.h> //open()
 #include <sys/stat.h> //O_WRONLY
+#include <signal.h>
+
 
 int fd;
 char *myfifo = "/tmp/myfifo";
+int is_running = 1;
+char buffer[100]; //this to config?
 
 /* Notes. Only one daemon. If daemon already exists, do not create a new one
  *
  */
 int logcus(char *msg) {
-	// TODO: First check that daemon exists.
+	// TODO: First check if daemon exists.
 	fd = open(myfifo, O_WRONLY);
 	write(fd, msg, (strlen(msg)+1));
 	return 0;
 }
 
+
+int close_logcus() {
+	is_running = 0;
+	printf("closing logcus\n");
+	fd = open(myfifo, O_WRONLY);
+	write(fd, "terminate", 10);
+	return(EXIT_SUCCESS);
+}
 
 
 /* Init forks a child process. The parent returns and continues executing
@@ -53,6 +65,9 @@ int init_logcus() {
 		if (process_id2 > 0) {
 			/* Orphanate/detach grandchild by killing its parent.*/
 			printf("This process is becoming a daemon: %d \n", process_id2); //daemon PID
+			FILE *file_open = fopen("pid.tmp", "w+");
+			fprintf(file_open, "%d\n", process_id2);
+			fclose(file_open);
 			exit(EXIT_SUCCESS);
 		}
 		/* ---GRANDCHILD---*/
@@ -81,14 +96,13 @@ int init_logcus() {
 		if(fd == -1){
 			exit(EXIT_FAILURE);
 		}
-		fp = fopen ("Log.txt", "w+");
+		fp = fopen ("/tmp/Log.txt", "w+");
 
 		/* DAEMON INITALIZED START MAINLOOP */
-		while (1)	{
+		while (strcmp(buffer,"terminate") != 0)	{
 			//Dont block context switches, let the process sleep for some time
 			fprintf(fp, "Daemon running\n");
 			sleep(1);
-			char buffer[100];
 			int nbytes = read(fd, buffer, sizeof(buffer));
 			if(nbytes > 0) {
 				fprintf(fp, "%s\n", buffer);
@@ -96,7 +110,9 @@ int init_logcus() {
 			fflush(fp);
 			// Implement and call some function that does core work for this daemon.
 		}
+		fprintf(fp, "closing!\n");
 		fclose(fp);
+		remove("pid.tmp");
 		close(fd);
 		return(EXIT_SUCCESS);
 	}
