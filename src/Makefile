@@ -4,7 +4,7 @@ SRC_FILES2=test.c logcus.c
 all: main
 
 main: $(SRC_FILES)
-	gcc -g -Wall -Wextra -pedantic -std=c99 -o $@ $(SRC_FILES) -lm
+	gcc -g -Wall -Wextra -pedantic -std=c99 -o $@ $(SRC_FILES) -pthread -lrt -lm
 
 clean:
 	rm -f main
