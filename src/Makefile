@@ -8,10 +8,11 @@ main: $(SRC_FILES)
 
 clean:
 	rm -f main
+	rm -f test
 	> msg.log
 
 memcheck:
 	valgrind --leak-check=full ./main example.c
 
 test: $(SRC_FILES2)
-	gcc -g -Wall -Wextra -pedantic -std=c99 -o $@ $(SRC_FILES2) -lm
+	gcc -g -Wall -Wextra -pedantic -std=c99 -o $@ $(SRC_FILES2) -pthread -lrt -lm

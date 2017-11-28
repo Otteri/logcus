@@ -16,10 +16,19 @@
 int fd;
 char *myfifo = "/tmp/myfifo";
 int is_running = 1;
-char buffer[100]; //this to config?
+char buffer[1024]; //this to config?
 //static int *using_logcus = 0; //+1 init <and -1 close. if 0 do not run daemon.
 int shared_fd;
-unsigned* addr; //tells how many processes are using daemon
+unsigned* addr; //tells how many processes are using daemon TODO: ADD LOCK - currently race condition
+char *log_path = NULL;
+
+
+char * concat(const char *s1, const char *s2){
+  char *result = malloc(strlen(s1)+strlen(s2)+2);
+  strcpy(result, s1);
+  strcat(result, s2);
+  return result;
+}
 
 int shared_add() {
 	char *name ="/shared_logcus_count";
@@ -47,7 +56,7 @@ int check_logcus() {
 	char * line = NULL;
 	size_t len = 0;
 
- 	pid_file = fopen ("/tmp/pid.txt", "r");
+ 	pid_file = fopen("/tmp/pid.txt", "r");
 	if(pid_file == NULL) {
 		return -1;
 	}
@@ -79,43 +88,62 @@ int logcus(char *msg) {
 		write(fd, msg, (strlen(msg)+1));
 		return 0;
 	}
-	printf("ERROR! daemon is not currently running\n");
+	printf("ERROR! Cannot write. Daemon is not currently running\n");
 	return -1;
 }
 
 
+unsigned * create_shared() {
+	// This function only creates THE shared variable.
+	// wanted to lighten the load from init_function
+	// CREATING ADDR
+	//TODO: Function for setting follofing objects???
+
+	// Create new obj
+	shared_fd = shm_open("/users", O_RDWR | O_CREAT, 0666);
+	if(shared_fd == -1){
+		fprintf(stderr, "Cannot create shared object: using_logcus. %s\n",
+		strerror(errno));
+		return(addr = NULL);
+	}
+	// Set size of memory obj
+	if(ftruncate(shared_fd, sizeof(*addr)) == -1){
+		fprintf(stderr, "ftruncate: %s\n", strerror(errno));
+		return(addr = NULL);
+	}
+	// Map the memory obj
+	addr = mmap(0, sizeof(*addr), PROT_READ | PROT_WRITE, MAP_SHARED, shared_fd, 0);
+	if(addr == MAP_FAILED) {
+		fprintf(stderr, "mmap failed: %s\n", strerror(errno));
+		return(addr = NULL);
+	}
+	return addr;
+}
+
+
 unsigned * open_shared() {
- // Create new obj
+ // Open the shared obj
  int shared_fd = shm_open("/users", O_RDWR, 0666);
  if(shared_fd == -1) {
 	 fprintf(stderr, "Cannot create shared object: using_logcus. %s\n",
 	 strerror(errno));
-	 //return;
  }
  struct stat sb;
  fstat(shared_fd, &sb);
- //off_t length = sb.st_size;
  unsigned *addr = mmap(0, sizeof(*addr), PROT_READ | PROT_WRITE, MAP_SHARED, shared_fd, 0);
  if(addr == MAP_FAILED) {
 	 fprintf(stderr, "mmap failed: %s\n", strerror(errno));
-	 //return;
  }
  return addr;
 }
 
 
 int close_logcus() {
-	is_running = 0;
-	printf("closing logcus!\n");
 	unsigned * addr = open_shared();
-	printf("addr in close: %d\n", *addr);
 	*addr = *addr - 1;
-	printf("Processes using logcus: %d\n", *addr);
-	fd = open(myfifo, O_WRONLY);
-	write(fd, "terminate", 10);
+	printf("Reamining processes process count: %d\n", *addr);
 	return(EXIT_SUCCESS);
 }
-
 
 
 /* Init forks a child process. The parent returns and continues executing
@@ -125,6 +153,16 @@ int close_logcus() {
  */
 
 int init_logcus() {
+
+	// Check if logcus daemon already exists
+	int ret = check_logcus();
+	if(ret == 1) {
+		unsigned *addr = open_shared();
+		*addr = * addr + 1; // just mark that one more process uses logcus
+		return EXIT_SUCCESS;
+	}
+
+	// Start initalization (no daemon exists).
 	FILE *fp= NULL;
 	pid_t process_id1 = 0;  // child - (will be killed)
 	pid_t process_id2 = 0; // grandchild -> daemon
@@ -159,6 +197,12 @@ int init_logcus() {
 			printf("Setting new session failed\n");
 			exit(EXIT_FAILURE);
 		}
+
+		char cwd[1024];
+		if(getcwd(cwd, sizeof(cwd)) == NULL){
+			return(EXIT_FAILURE); // cannot get the path
+		}
+
 		// Change the current working directory to root.
 		if((chdir("/")) < 0){
 			exit(EXIT_FAILURE);
@@ -172,77 +216,47 @@ int init_logcus() {
 
 		// TODO: error handling
 		mkfifo(myfifo, 0666);
-
 		// Open a log file in write mode.
 		fd = open(myfifo, O_RDONLY);
 		if(fd == -1){
 			exit(EXIT_FAILURE);
 		}
-		fp = fopen ("/tmp/Log.txt", "w+");
 
-
-
-
-
-
-		// CREATING ADDR
-		//TODO: Function for setting follofing objects???
-
-		// Create new obj
-		shared_fd = shm_open("/users", O_RDWR | O_CREAT, 0666);
-		if(shared_fd == -1){
-			fprintf(fp, "Cannot create shared object: using_logcus. %s\n",
-			strerror(errno));
-			return(EXIT_FAILURE);
+		// Create log either to project src dir or user defined path
+		if(log_path == NULL) {
+			char *full_path = concat(cwd, "/log.txt");
+			fp = fopen(full_path, "w+");
+			free(full_path);
+		} else {
+			fp = fopen(log_path, "w+");
 		}
-		// Set size of memory obj
-		if(ftruncate(shared_fd, sizeof(*addr)) == -1){
-			fprintf(fp, "ftruncate: %s\n", strerror(errno));
-			return EXIT_FAILURE;
-		}
-		// Map the memory obj
-		addr = mmap(0, sizeof(*addr), PROT_READ | PROT_WRITE, MAP_SHARED, shared_fd, 0);
-		if(addr == MAP_FAILED) {
-			fprintf(fp, "mmap failed: %s\n", strerror(errno));
-			return EXIT_FAILURE;
-		}
-		//shm_unlink("/users");
 
+
+		if(fp == NULL) {
+			return EXIT_FAILURE; // cannot create log
+		}
+
+		// Create shared process counter variable
+		unsigned * addr = create_shared();
 		*addr = 1;
-		fprintf(fp, "addr: %d\n", *addr);
-
-
-  	//unsigned * addr = open_shared();
-
-
-
-
-
-
-
-
-		/*
-		using_logcus = mmap(NULL, sizeof(*using_logcus), PROT_READ | PROT_WRITE, MAP_SHARED, -1, 0);
-		*using_logcus = 1;
-		*/
 
 		/* DAEMON INITALIZED START MAINLOOP */
 		while (*addr > 0)	{
 			//Dont block context switches, let the process sleep for some time
-			fprintf(fp, "Daemon running\n");
 			sleep(1);
 			int nbytes = read(fd, buffer, sizeof(buffer));
-			if(nbytes > 0) {
-				fprintf(fp, "%s\n", buffer);
+			if(nbytes > 0 && sizeof(buffer) > 0) {
+				fprintf(fp, "%s", buffer);
 			}
 			fflush(fp);
-			// Implement and call some function that does core work for this daemon.
 		}
-		fprintf(fp, "closing!\n");
-		fclose(fp);
-		remove("/tmp/pid.tmp"); // remove tmp file
-		//shm_unlink("/users"); // free shared memory
+		// Shutting daemon process down. Do a clean exit.
+		remove("/tmp/pid.txt"); // remove tmp file
+		remove(myfifo);
+		shm_unlink("/users"); // free shared memory
 		close(fd); // close fifo
+		fprintf(fp, "Daemon stopped with a clean exit\n");
+		fclose(fp);
 		return(EXIT_SUCCESS);
 	}
 	else {
