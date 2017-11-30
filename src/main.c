@@ -18,11 +18,7 @@
 
 
 int run = 1;
-//static int *using_logcus;
-/*    Rough program structure:
- * ------------------------------------------------
- *
- */
+
  void sigint_handler(int sig) {
   printf("Caught signal %d\n", sig);
   printf("killing main process: %d.\n", getpid());
@@ -33,13 +29,17 @@ int run = 1;
 int main(int argc, char *argv[]) {
   (void) argc;
   (void) argv;
-  printf("Hello!\n");
-  init_logcus();
+  printf("My pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
+	if (open_logcus() < 0) {
+		perror("daemon");
+		exit(2);
+	}
+
 
   while(run) {
-    printf("main is running...\n");
+    printf("main is running... [press ^C to stop]\n");
     signal(SIGINT, sigint_handler);
-    logcus("string sent from main.c program\n");
+    //logcus("string sent from main.c program\n");
     sleep(2);
   }
   close_logcus();
