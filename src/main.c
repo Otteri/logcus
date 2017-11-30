@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
   while(run) {
     printf("main is running... [press ^C to stop]\n");
     signal(SIGINT, sigint_handler);
-    //logcus("string sent from main.c program\n");
+    logcus("string sent from main.c program\n");
     sleep(2);
   }
   close_logcus();

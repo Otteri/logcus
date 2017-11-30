@@ -1,6 +1,7 @@
 #define _XOPEN_SOURCE 700 //ftruncate()
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <syslog.h>
 #include <errno.h>
 #include <unistd.h>
@@ -12,15 +13,16 @@
 #include <assert.h>
 
 #define DAEMON_FIFO "/tmp/daemon_fifo"
-#define FIFO_PERMS (S_IRWXU | S_IWGRP| S_IWOTH)
+#define CUSTOM_LOG  NULL
+char cwd[1024];
 
 
-
-
-
-
-
-
+char * concat(const char *s1, const char *s2){
+  char *result = malloc(strlen(s1)+strlen(s2)+2);
+  strcpy(result, s1);
+  strcat(result, s2);
+  return result;
+}
 
 /* closeall() -- close all FDs >= a specified value */
 void closeall(void) {
@@ -119,6 +121,10 @@ int create_daemon(void) {
 
 			printf("Daemon my pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
 
+			if(getcwd(cwd, sizeof(cwd)) == NULL){
+				printf("Error! Cannot get current working directory\n");
+			}
+
 			/* Get to the root directory, just in case the current working
 			 * directory needs to be unmounted at some point. */
 			chdir("/");
@@ -133,7 +139,6 @@ int create_daemon(void) {
 			dup(0);  /* Copy /dev/null also as stderr stream */
 
 			// Now we're a daemon, a lonely avenger fighting for the cause.
-			syslog(LOG_INFO, "created daemon");
 			return 0;
 
 		case -1: return -1; 					// Fork failed!
@@ -160,41 +165,69 @@ void errreport(const char *str) {
 /* This is the daemon's main work -- listen for messages and then do something */
 void process(void) {
 	char str[1024];
-	int len, fd;
+	FILE *fp;
+	int nbytes, fd;
 
 	openlog("my_daemon", LOG_PID, LOG_DAEMON);
-	umask(0);
+	umask(0); //here?
 	
-	if ((mkfifo(DAEMON_FIFO, FIFO_PERMS) == -1) && (errno != EEXIST)) {
+
+	// Open/create log file
+	if(CUSTOM_LOG == NULL) {
+		char *full_path = concat(cwd, "/log.txt");
+		syslog(LOG_INFO,"full_path: %s\n", full_path);
+		fp = fopen(full_path, "w+");
+		free(full_path);
+	} else {
+		fp = fopen(CUSTOM_LOG, "w+");
+	}
+
+	// Create FIFO connection
+	if ((mkfifo(DAEMON_FIFO, 0666) == -1) && (errno != EEXIST)) {
 		 errexit("Failed to create a FIFO");
 	}
-	
-	if(errno == EEXIST) {
-		struct stat stat_buf;
-		  
-		if(stat(DAEMON_FIFO,&stat_buf) != 0)
-			errexit("stat");
-		if(S_ISFIFO(stat_buf.st_mode))
-			syslog(LOG_INFO,"File %s exists, and is a FIFO, not problem...",DAEMON_FIFO);
-		else
-			errexit("File exists, and is not a FIFO, exiting...");
+	if ((fd = open(DAEMON_FIFO, O_RDONLY)) == -1) {
+		errexit("Failed to open FIFO");
 	}
 
-	/*if ((fd = open(DAEMON_FIFO, O_RDONLY)) == -1) 
-		errexit("Failed to open FIFO");*/
 
 	syslog(LOG_INFO,"-DAEMON- My pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
+	
+	// Start processing
 	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
-
 	while(*processes_using_logcus > 0) {
 		syslog(LOG_INFO, "daemon is active (loop). pul: %d\n", *processes_using_logcus);
-		/*len = read(fd,str,1024);
-		if (len>0) {
-			str[len]='\0';
+		nbytes = read(fd,str,sizeof(str));
+		if (nbytes > 0) {
+			str[nbytes]='\0';
 			syslog(LOG_INFO, "Someone sent me a job to do: %s", str);
-		}*/
+		}
 	}
+	// Close and remove temporary contents - do a clean exit.
 	syslog(LOG_INFO, "daemon is out of loop! -Closing\n");
+	remove(DAEMON_FIFO);
+	close(fd);
+	fclose(fp);
+	return;
+}
+
+int logcus(char *message) {
+ /**
+	* First checks that daemon process is running by checking that shared variable
+	* "processes_using_logcus" exists. (The variable is created when daemon is initalized).
+	* After verifying that daemon exists, the message can be passed through FIFO to be
+	* written in log file.
+	*/
+
+	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
+	if(processes_using_logcus == NULL) {
+		fprintf(stderr, "Error! No daemon initalized. Have you called open_logcus?");
+		return -1;
+	}
+	//printf("processes using: %d\n", *processes_using_logcus);
+	int fd = open(DAEMON_FIFO, O_WRONLY);
+	write(fd, message, strlen(message)+1);
+	return 0;
 }
 
 int open_logcus(void) {
