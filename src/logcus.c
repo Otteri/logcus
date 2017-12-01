@@ -11,10 +11,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <assert.h>
+#include <math.h>
+#include <time.h>
+
 
 #define DAEMON_FIFO "/tmp/daemon_fifo"
 #define CUSTOM_LOG  NULL
-char cwd[1024];
+char CWD[1024]; //logcus initalizer working directory
 
 
 char * concat(const char *s1, const char *s2){
@@ -23,6 +26,40 @@ char * concat(const char *s1, const char *s2){
   strcat(result, s2);
   return result;
 }
+
+char * to_string(int n) {
+  // for normal ints, 12-chars should be enough.
+  static char str[12];
+  sprintf(str, "%d", n);
+  return str;
+}
+
+char * get_timestamp (void) {
+ /**
+  * Function returns timestamp in millisecond precision. It does
+  * not add a newline at the end of string. Calling function must
+  * free the memory.
+  */
+	time_t 	now;
+	struct tm ts;
+  long ms;
+  struct timespec spec;
+  char buf[80];
+
+  //char timestamp[80];
+  char* timestamp = malloc(25*sizeof(char));
+
+  time(&now);
+  clock_gettime(CLOCK_REALTIME, &spec);
+ 	ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
+  ts = *localtime(&now);
+  strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &ts);
+  
+  sprintf(timestamp, "%s.%03ld", buf, ms);
+  printf("sprintf: %s\n", timestamp);
+  return timestamp;
+}
+
 
 /* closeall() -- close all FDs >= a specified value */
 void closeall(void) {
@@ -42,7 +79,7 @@ void closeall(void) {
  * It's believed to work on all Posix systems. 
  *
  *      
- *
+ *  |
  * main
  *  |
  *  |......c1              fork()
@@ -51,7 +88,7 @@ void closeall(void) {
  *  |      .      |
  *  |      .      |
  *  |      .      |
- *
+ *  ⌄      .      ⌄
  *
  * We can create daemon by killing c1, thus detaching c2.
  *
@@ -121,7 +158,7 @@ int create_daemon(void) {
 
 			printf("Daemon my pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
 
-			if(getcwd(cwd, sizeof(cwd)) == NULL){
+			if(getcwd(CWD, sizeof(CWD)) == NULL){
 				printf("Error! Cannot get current working directory\n");
 			}
 
@@ -174,7 +211,7 @@ void process(void) {
 
 	// Open/create log file
 	if(CUSTOM_LOG == NULL) {
-		char *full_path = concat(cwd, "/log.txt");
+		char *full_path = concat(CWD, "/log.txt");
 		syslog(LOG_INFO,"full_path: %s\n", full_path);
 		fp = fopen(full_path, "w+");
 		free(full_path);
@@ -201,6 +238,8 @@ void process(void) {
 		if (nbytes > 0) {
 			str[nbytes]='\0';
 			syslog(LOG_INFO, "Someone sent me a job to do: %s", str);
+			fprintf(fp, "%s", str);
+			fflush(fp);
 		}
 	}
 	// Close and remove temporary contents - do a clean exit.
@@ -218,15 +257,27 @@ int logcus(char *message) {
 	* After verifying that daemon exists, the message can be passed through FIFO to be
 	* written in log file.
 	*/
-
+	char full_message[1024];
 	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	if(processes_using_logcus == NULL) {
 		fprintf(stderr, "Error! No daemon initalized. Have you called open_logcus?");
 		return -1;
 	}
-	//printf("processes using: %d\n", *processes_using_logcus);
+
+	char *pid = to_string(getpid());
+	char *timestamp = get_timestamp();
+	if((sprintf(full_message, "%s [%s]: %s\n", timestamp, pid, message)) == -1) {
+		fprintf(stderr, "Error! Cannot form full log message. (Message might be over max 1024 bytes).");
+		free(timestamp);
+		return -1;
+	}
+	free(timestamp);
+
+	printf("-processes %d\n", getppid());
 	int fd = open(DAEMON_FIFO, O_WRONLY);
-	write(fd, message, strlen(message)+1);
+	write(fd, full_message, strlen(full_message)+1);
+	printf("log msg: %s\n", full_message);
+
 	return 0;
 }
 
@@ -240,7 +291,6 @@ int open_logcus(void) {
 	// Check if logcus needs to be initalized (first call), and possibly initalize.
 	if(processes_using_logcus == NULL || *processes_using_logcus == 0) {
 		processes_using_logcus = create_shared_variable("/processes_using_logcus");
-		*processes_using_logcus = 0; //just to be safe
 		switch(create_daemon()) {
 			case 0:
 				process();      		// Let the daemon do its work
@@ -249,7 +299,8 @@ int open_logcus(void) {
 			default: break;	 			// Original process can continue
 		}
 	}
-
+	printf("active processes when opening: %d\n", *processes_using_logcus);
+	*processes_using_logcus = 0; // just to be sure
 	// Always increment process counter by one, when this function is called.
 	processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	*processes_using_logcus += 1;

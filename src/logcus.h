@@ -1,4 +1,7 @@
 char * concat(const char*, const char*);
+char * get_timestamp(void);
+char * to_string(int n);
+
 void closeall(void);
 int create_daemon(void);
 void errexit(const char *str);

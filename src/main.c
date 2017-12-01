@@ -15,7 +15,7 @@
 #include <sys/stat.h> //O_WRONLY
 #include <fcntl.h>  //O_
 #include <unistd.h>
-
+#include <time.h>
 
 int run = 1;
 
@@ -29,6 +29,10 @@ int run = 1;
 int main(int argc, char *argv[]) {
   (void) argc;
   (void) argv;
+  struct timespec ts;
+  ts.tv_sec = 0;
+  ts.tv_nsec = 100000000;
+
   printf("My pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
 	if (open_logcus() < 0) {
 		perror("daemon");
@@ -40,7 +44,9 @@ int main(int argc, char *argv[]) {
     printf("main is running... [press ^C to stop]\n");
     signal(SIGINT, sigint_handler);
     logcus("string sent from main.c program\n");
-    sleep(2);
+    sleep(1);
+    //usleep(3*1000);
+    nanosleep(&ts, NULL);
   }
   close_logcus();
   printf("...main terminating...\n");
