@@ -56,7 +56,6 @@ char * get_timestamp (void) {
   strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &ts);
   
   sprintf(timestamp, "%s.%03ld", buf, ms);
-  printf("sprintf: %s\n", timestamp);
   return timestamp;
 }
 
@@ -272,12 +271,8 @@ int logcus(char *message) {
 		return -1;
 	}
 	free(timestamp);
-
-	printf("-processes %d\n", getppid());
 	int fd = open(DAEMON_FIFO, O_WRONLY);
 	write(fd, full_message, strlen(full_message)+1);
-	printf("log msg: %s\n", full_message);
-
 	return 0;
 }
 
@@ -327,7 +322,7 @@ int close_logcus(void) {
 		return 1;
 	}
 	printf("active processes after close: %d\n", *processes_using_logcus);
-	//*processes_using_logcus = 0;
+	*processes_using_logcus = 0;
 	return 0;
 }
 
