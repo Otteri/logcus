@@ -13,11 +13,19 @@
 #include <assert.h>
 #include <math.h>
 #include <time.h>
+#include <pthread.h>
 
+#include "logcus.h"
+/*
+#ifndef logcus.h
+#define <logcus.h>
+#endif
+*/
 
 #define DAEMON_FIFO "/tmp/daemon_fifo"
 #define CUSTOM_LOG  NULL
 char CWD[1024]; //logcus initalizer working directory
+pthread_mutex_t LOCK;
 
 
 char * concat(const char *s1, const char *s2){
@@ -249,30 +257,78 @@ void process(void) {
 	return;
 }
 
-int logcus(char *message) {
- /**
-	* First checks that daemon process is running by checking that shared variable
-	* "processes_using_logcus" exists. (The variable is created when daemon is initalized).
-	* After verifying that daemon exists, the message can be passed through FIFO to be
-	* written in log file.
-	*/
-	char full_message[1024];
+
+void *entry_function(void *args) {
+	printf("Thread: entry function\n");
+	logcus_struct *args_ptr = args;
+	printf("pff: %d\n", args_ptr->tmp);
+	printf("pff1: %s\n", args_ptr->message);
+
+
+	pthread_mutex_lock(args_ptr->lock);
+	//&args.message;
+
+	
 	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	if(processes_using_logcus == NULL) {
 		fprintf(stderr, "Error! No daemon initalized. Have you called open_logcus?");
-		return -1;
+		//return -1;
 	}
-
+	// No errors detected (yet) - write event to the log
+	char full_message[strlen(args_ptr->message)+33 * sizeof(char)]; // timestamp + pid + '\0' = 33
 	char *pid = to_string(getpid());
 	char *timestamp = get_timestamp();
-	if((sprintf(full_message, "%s [%s]: %s\n", timestamp, pid, message)) == -1) {
+	if((sprintf(full_message, "%s [%s]: %s\n", timestamp, pid, args_ptr->message)) == -1) {
 		fprintf(stderr, "Error! Cannot form full log message. (Message might be over max 1024 bytes).");
 		free(timestamp);
-		return -1;
+		//return -1;
 	}
 	free(timestamp);
 	int fd = open(DAEMON_FIFO, O_WRONLY);
 	write(fd, full_message, strlen(full_message)+1);
+
+	pthread_mutex_unlock(args_ptr->lock);
+	
+	return 0;
+}
+
+int logcus(char *message) {
+ /**
+	* First checks that daemon process is running by checking that shared variable
+	* (processes_using_logcus) exists. (The variable is created when daemon is initalized).
+	* After verifying that daemon exists, the message can be passed through FIFO to be
+	* written in log file.
+	**/
+
+	/* daemon and writing process - shared recourse*/
+	pthread_t queuer;
+
+
+
+
+	//int args = 0;
+	logcus_struct *args = malloc(sizeof(logcus_struct));
+	args->tmp = 0;
+	
+	args->lock = &LOCK;
+
+	args->message = malloc(strlen(message)+1);
+	strcpy(args->message, message);
+
+
+	if(pthread_create(&queuer, NULL, entry_function, args)) {
+		//free(args);
+		fprintf(stderr, "ERROR! Cannot create queuer thread\n");
+		return -1;
+	}
+
+
+	if(pthread_join(queuer, NULL)) {
+		fprintf(stderr, "ERROR! Cannot join threads\n");
+		return -1;
+	}
+	free(args);
+
 	return 0;
 }
 
@@ -285,6 +341,13 @@ int open_logcus(void) {
 	unsigned *processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	// Check if logcus needs to be initalized (first call), and possibly initalize.
 	if(processes_using_logcus == NULL || *processes_using_logcus == 0) {
+		//*processes_using_logcus = 0; // just to be sure
+		printf("INITALIZING????????????????????\n");
+		if(pthread_mutex_init(&LOCK, NULL) != 0) {
+			printf("\n mutex init failed\n");
+			return -1;
+		}
+
 		processes_using_logcus = create_shared_variable("/processes_using_logcus");
 		switch(create_daemon()) {
 			case 0:
@@ -295,10 +358,11 @@ int open_logcus(void) {
 		}
 	}
 	printf("active processes when opening: %d\n", *processes_using_logcus);
-	*processes_using_logcus = 0; // just to be sure
+	//*processes_using_logcus = 0; // just to be sure
 	// Always increment process counter by one, when this function is called.
 	processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	*processes_using_logcus += 1;
+	printf("processes active: %d!!!!!!!!!!!!!!!!!!!!!!!\n", *processes_using_logcus);
 	return 0;
 }
 
@@ -316,13 +380,13 @@ int close_logcus(void) {
 	*processes_using_logcus -= 1; // TODO: fix race condition
 	
 	if(*processes_using_logcus < 1) {
-		printf("shut down\n");
+		printf("Completely shutting down service.\n");
 		shm_unlink("/processes_using_logcus");
 		munmap(processes_using_logcus, sizeof(processes_using_logcus));
 		return 1;
 	}
 	printf("active processes after close: %d\n", *processes_using_logcus);
-	*processes_using_logcus = 0;
+	//*processes_using_logcus = 0;
 	return 0;
 }
 
