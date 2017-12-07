@@ -10,7 +10,7 @@ void process(void);
 unsigned * create_shared_variable(const char *name);
 unsigned * open_shared_variable(const char *name);
 
-int logcus(char *);
+int logcus(char *, ...);
 int open_logcus(void);
 int close_logcus(void);
 

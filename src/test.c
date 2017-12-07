@@ -78,6 +78,19 @@ int test_reaction_ability() {
 }
 
 
+int test_process(int process_number){
+  if (open_logcus() < 0) {
+    exit(2);
+  }
+  while(1) {
+    printf("process: %d\n", process_number);
+    error("wut the fuck%s | %d\n", "homo",10);
+    logcus("Log message sent from test_process\n");
+    sleep(3);
+  }
+  return 0;
+}
+
 int test_simultaneous_process_response() {
   /**
 
@@ -85,14 +98,16 @@ int test_simultaneous_process_response() {
   int n;
   printf("How many simultaneous processes you want to create?\n");
   scanf("%d", &n);
-  for(int i = 0; i < n; i++){
+  logcus("Starting test\n");
+  for(int i = 1; i < n+1; i++){
+   
     printf("simultaneous processes currently: %d\n", i);
     switch (fork()) {
-      case 0:  logcus("Log message sent from test1.c program\n");  // Child
-      case -1: return -1; /* Fork failed! */
-      default: logcus("Log message sent from test1.c program\n");  // Parent
+      case 0:  break;//logcus("Log message sent from test1.c program\n");  // Child
+      case -1: return -1; 
+      default: test_process(i);  // Parent
     }
-    sleep(1);
+    sleep(2);
   }
 
   return 0;

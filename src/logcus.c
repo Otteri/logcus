@@ -16,6 +16,9 @@
 #include <pthread.h>
 
 #include "logcus.h"
+
+#include <stdarg.h>
+
 /*
 #ifndef logcus.h
 #define <logcus.h>
@@ -139,6 +142,18 @@ unsigned * open_shared_variable(const char *name) {
 	return addr;
 }
 
+int replace_shared_variable(char *shared_variable, char *replacement) {
+	/**
+	 * Readers-writer lock (RW):
+	 * Function is used for modifying the shared variable
+	 * We want to avoid possible race-conditions, so this
+	 * function should be called, when we want to change
+	 * shared recourse.
+	 **/
+
+
+	return 0;
+}
 
 int create_daemon(void) {
 	/* Creates a daemon process and let's the calling process live
@@ -292,7 +307,7 @@ void *entry_function(void *args) {
 	return 0;
 }
 
-int logcus(char *message) {
+int logcus(char *message, ...) {
  /**
 	* First checks that daemon process is running by checking that shared variable
 	* (processes_using_logcus) exists. (The variable is created when daemon is initalized).
@@ -302,18 +317,23 @@ int logcus(char *message) {
 
 	/* daemon and writing process - shared recourse*/
 	pthread_t queuer;
+	char tmp[1024];
 
+	va_list arguments;
+	va_start(arguments, message);
+	vsprintf(tmp, message, arguments);
+	va_end(arguments);
+	//fprintf(stdout, "\n");
+	printf("sprintf: %s\n", tmp);
+	//printf("vprintf: %s\n", tmp);
 
-
-
-	//int args = 0;
-	logcus_struct *args = malloc(sizeof(logcus_struct));
-	args->tmp = 0;
+	logcus_struct *args = malloc(sizeof(logcus_struct)); // move this? - don't want t
+	//args->tmp = 0;
 	
 	args->lock = &LOCK;
 
-	args->message = malloc(strlen(message)+1);
-	strcpy(args->message, message);
+	args->message = malloc(strlen(tmp)+1);
+	strcpy(args->message, tmp);
 
 
 	if(pthread_create(&queuer, NULL, entry_function, args)) {
