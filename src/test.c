@@ -23,40 +23,42 @@ int processes_ready = 0;
 
  void sigint_handler(int sig) {
   (void) sig;
-  //printf("Caught signal %d\n", sig);
-  //printf("killing main process: %d.\n", getpid());
-  logcus("Shutting down %d.\n", getpid());
+  logcus("process closing logcus.\n", getpid());
   close_logcus();
   exit(0);
  }
 
-void sigusr1_handler(int sig) {
-  printf("Catched sigurs\n");
-  processes_ready++;
-  printf("catched sigusr1 %d\n", processes_ready);
-}
+
+ void sigterm_handler(int sig) {
+  (void) sig;
+  logcus("terminating %d.\n", getpid());
+  close_logcus();
+  exit(0);
+ }
 
 
 int test_reaction_ability() {
  /**
-  * Starts from one seconds. Loops until logcus
-  * fails, thus printing the minium sleep time which
-  * equals minium delay time between logcus calls.
-  *
-  * This test isn't good. First of all, the system cannot
-  * guarantee nanosecond accuracy even though it can output
-  * nanoseconds. This test doesn't show when the logsystem
-  * falls apart, it just proves that the logcus can work 
-  * quite fast.
-  */
+  * Function tests logcus' reaction time by sending log messages
+  * with decreasing intervals. Function starts from one second
+  * and loops until logcus crashes or message interval meets 1000ns.
+  * It makes no sense to test under 1000ns response, because the results
+  * wouldn't be very accurate due to implementation of this function and
+  * because the standards/hardware cannot guarntee nanosecond accuracy.
+  * --------------------------------------------------------------------
+  * It seems that the logcus goes through this test without problems,
+  * so basically the test just prove that the logcus can work quite
+  * fast. The function peak is around 6 messages in 0.01 ms, so
+  * 1000ns should be quite good limit. The limit in for loop can be
+  * changed to another.
+  **/
   int ret = 0;
   struct timespec ts;
   ts.tv_sec = 0;
-  ts.tv_nsec = 1000000000; //1s
+  ts.tv_nsec = 1000000000; // 1s
   long ms = round(ts.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
 
-  // 100ms equals 100000000 nanoseconds
-  for(; ts.tv_nsec > 100 && ret >= 0; ) { // 1000ns = 0.001ms
+  for(; ts.tv_nsec > 1000 && ret >= 0; ) { // 1000ns limit 
 
     if(ts.tv_nsec > 100000000 && ts.tv_nsec <= 1000000000) {
       ts.tv_nsec -= 100000000;
@@ -72,6 +74,10 @@ int test_reaction_ability() {
       ts.tv_nsec -= 1000;
     } else if(ts.tv_nsec > 100 && ts.tv_nsec <= 1000) {
       ts.tv_nsec -= 100;
+    } else if(ts.tv_nsec > 10 && ts.tv_nsec <= 100) {
+      ts.tv_nsec -= 10;
+    } else if(ts.tv_nsec > 1 && ts.tv_nsec <= 10) {
+      ts.tv_nsec -= 1;
     } 
 
     ret = logcus("Log message sent from test1.c program\n"); 
@@ -79,37 +85,28 @@ int test_reaction_ability() {
     printf("test_reaction_ability running. [ret: %d] [react: %03ld ms] [react: %.9ld ns]\n", ret, ms, ts.tv_nsec);
     nanosleep(&ts, NULL);
   }
-  printf("Reaction time: %.9ld ns\n", ts.tv_nsec);
+  printf("Reaction time is under: %.9ld ns\n", ts.tv_nsec);
   return 0;
 }
 
 
-int test_process(pid_t pid, pid_t original_process, int n){
+int test_process(pid_t pid){
   if (open_logcus() < 0) {
     printf("Failed to open logcus!!!");
     exit(2);
   }
-  printf("Created a new process \n");
-  logcus("Created process: %d\n", pid);
-  syslog(LOG_INFO, "Created process: %d\n", pid);
-
-
-  while(processes_ready != n) {
-    printf("process: %d\n", pid);
-    //logcus("Log message sent from test_process_%d\n", pid);
-    //signal(SIGUSR1, sigusr1_handler);
-    //printf("sending signal to: %d\n", original_process);
-    signal(SIGINT, sigint_handler);
-    kill(original_process, SIGUSR1);
+  logcus("Process opened logcus", pid);
+  while(1) {
+    logcus("Log message sent from test_process_%d\n", pid);
+    syslog(LOG_INFO, "Log message sent from test_process %d\n", pid);
     sleep(1);
   }
-  close_logcus();
-  return 0;
+  return 0; //never getting here
 }
 
 int test_simultaneous_process_response() {
   /**
-   * Test forks new processes requested amount. All processes use
+   * This test forks new processes requested amount. All processes use
    * logcus, thus stressing it and testing its capabilities.
    *
    * Notice that test stresses system with n+1 processes, because
@@ -121,42 +118,45 @@ int test_simultaneous_process_response() {
    * We set the value to 0 manually, and the value changes when final
    * process is actually created. This way, the parent knows when it 
    * can continue to next part in code (termination).
-   * Communication is done with signals.
+   *
+   * Currently there is a small problem in the function. It doesn't 
+   * guarntee that the childs have enough time to open the logcus and 
+   * send message, since the function only checks that all childs are 
+   * created.
    **/
   int n; // user defines n 
   printf("How many simultaneous processes you want to create?\n");
   scanf("%d", &n);
+  n = n-1;
   pid_t pids[n];
   pids[n] = 0; // set flag
-  printf("MY PID IS: %d\n", getpid());
-  pid_t original_process = getpid();
+
   // Create processes
-  for(int i=1; i < n+1; i++){
+  for(int i=0; i < n+1; i++){
     if((pids[i] = fork()) < 0) {
       logcus("Forking failed: %d\n", getpid());
       perror("forking error\n");
       abort();
     }
     else if (pids[i] == 0) {
-      test_process(getpid(), original_process, n);
+      // CHILD!!!
+      test_process(getpid());
     }
-    //sleep(1);
+    // Let's give little time for child to open logcus
+    // without this, all messages wont get logged (not sure why,
+    // tested with syslog also and it left them also out).
+    nanosleep((const struct timespec[]){{0, 100000}}, NULL);
   }
-  sleep(1);
   
-  // Original process waits
-  while(processes_ready != n) { //pids[n] == 0
-    signal(SIGUSR1, sigusr1_handler);
-    printf("My pid: %d\n", getpid());
-    printf("processes_ready: %d and n: %d \n", processes_ready, n);
-    //sleep(2);
+
+  // I'm parent checking for 0
+  while(pids[n] == 0) {
+    sleep(1);
   }
+  //sleep(5);
   // Test completed, childs alive. Do a clean exit.
-  for(int i = 1; i < n+1; i++){
-    printf("processes_ready: %d\n", processes_ready);
-    printf("pids wat: %d\n", pids[i]);
-    kill(pids[i], SIGINT);
-    //sleep(1);
+  for(int i = 0; i < n+1; i++){
+    kill(pids[i], SIGTERM);
   }
   return 0;
 }
@@ -197,7 +197,7 @@ int main(int argc, char *argv[]) {
   (void) argv;
   int select;
   signal(SIGINT, sigint_handler);
-  signal(SIGUSR1, sigusr1_handler);
+  signal(SIGTERM, sigterm_handler);
 
   if (open_logcus() < 0) {
     exit(2);

@@ -20,7 +20,7 @@
 #include "logcus.h"
 
 #define DAEMON_FIFO "/tmp/daemon_fifo"
-#define CUSTOM_LOG  NULL
+#define CUSTOM_LOG  "/home/joni/Koodi/C/logi.txt"
 char CWD[1024]; //logcus initalizer working directory
 pthread_mutex_t LOCK;
 
@@ -326,7 +326,7 @@ int logcus(char *message, ...) {
 
 
 	if(pthread_create(&queuer, NULL, entry_function, args)) {
-		//free(args);
+		free(args);
 		fprintf(stderr, "ERROR! Cannot create queuer thread\n");
 		return -1;
 	}
@@ -352,9 +352,8 @@ int open_logcus(void) {
 	// Check if logcus needs to be initalized (first call), and possibly initalize.
 	if(processes_using_logcus == NULL || *processes_using_logcus == 0) {
 		//*processes_using_logcus = 0; // just to be sure
-		printf("INITALIZING????????????????????\n");
 		if(pthread_mutex_init(&LOCK, NULL) != 0) {
-			printf("\n mutex init failed\n");
+			fprintf(stderr, "\n mutex init failed\n");
 			return -1;
 		}
 
@@ -367,12 +366,11 @@ int open_logcus(void) {
 			default: break;	 			// Original process can continue
 		}
 	}
-	printf("active processes when opening: %d\n", *processes_using_logcus);
+	//printf("active processes when opening: %d\n", *processes_using_logcus);
 	//*processes_using_logcus = 0; // just to be sure
 	// Always increment process counter by one, when this function is called.
 	processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	*processes_using_logcus += 1;
-	printf("processes active: %d!!!!!!!!!!!!!!!!!!!!!!!\n", *processes_using_logcus);
 	return 0;
 }
 
@@ -384,18 +382,18 @@ int close_logcus(void) {
 	 */
 	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	if(processes_using_logcus == NULL) {
-		printf("ERROR! Cannot open variable - unable to do a clean exit");
+		fprintf(stderr, "ERROR! Cannot open variable - unable to do a clean exit");
 		return -1;
 	}
 	*processes_using_logcus -= 1; // TODO: fix race condition
 	
 	if(*processes_using_logcus < 1) {
-		printf("Completely shutting down service.\n");
+		printf("\nCompletely shutting down service.\n");
 		shm_unlink("/processes_using_logcus");
 		munmap(processes_using_logcus, sizeof(processes_using_logcus));
 		return 1;
 	}
-	printf("active processes after close: %d\n", *processes_using_logcus);
+	//printf("active processes after close: %d\n", *processes_using_logcus);
 	//*processes_using_logcus = 0;
 	return 0;
 }
