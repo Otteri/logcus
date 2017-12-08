@@ -1,6 +1,6 @@
 #ifndef LOGCUS_H
 #define LOGCUS_H 
-#define _XOPEN_SOURCE 700 //ftruncate()
+#define _XOPEN_SOURCE 700 // ftruncate()
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,8 +20,8 @@
 #include "logcus.h"
 
 #define DAEMON_FIFO "/tmp/daemon_fifo"
-#define CUSTOM_LOG  "/home/joni/Koodi/C/logi.txt"
-char CWD[1024]; //logcus initalizer working directory
+#define CUSTOM_LOG  NULL // Write custom log path here inside quatation marks.
+char CWD[1024]; 				 // Working directory of logcus initalizer.
 pthread_mutex_t LOCK;
 
 
@@ -36,7 +36,7 @@ char * concat(const char *s1, const char *s2){
 }
 
 char * to_string(int n) {
-  // for normal ints, 12-chars should be enough.
+  /* for normal ints, 12-chars should be enough. */
   static char str[12];
   sprintf(str, "%d", n);
   return str;
@@ -45,16 +45,15 @@ char * to_string(int n) {
 char * get_timestamp (void) {
  /**
   * Function returns timestamp in millisecond precision. It does
-  * not add a newline at the end of string. Calling function must
-  * free the memory.
-  */
+  * not add a newline at the end of string. Caller function must
+  * free the memory mallocated in this function.
+  **/
 	time_t 	now;
 	struct tm ts;
   long ms;
   struct timespec spec;
   char buf[80];
 
-  //char timestamp[80];
   char* timestamp = malloc(25*sizeof(char));
 
   time(&now);
@@ -68,38 +67,15 @@ char * get_timestamp (void) {
 }
 
 
-/* closeall() -- close all FDs >= a specified value */
 void closeall(void) {
+	/* Closes all FDs. Handy in daemon creation.*/
 	int fd = 0;
 	int fdlimit = sysconf(_SC_OPEN_MAX);
 	while (fd < fdlimit)
 		close(fd++);
 }
 
-/**
- * Daemonize the process - detach process from user and disappear into the
- * background.
- *
- * Returns -1 on failure, but you can't do much except exit in
- * that case since we may already have forked.  This is based on the BSD
- * version, so the caller is responsible for things like the umask, etc.
- * It's believed to work on all Posix systems. 
- *
- *      
- *  |
- * main
- *  |
- *  |......c1              fork()
- *  |      .
- *  |      .......c2       fork()
- *  |      .      |
- *  |      .      |
- *  |      .      |
- *  ⌄      .      ⌄
- *
- * We can create daemon by killing c1, thus detaching c2.
- *
- */
+
 
 unsigned * create_shared_variable(const char *name) {
 
@@ -152,28 +128,41 @@ int replace_shared_variable(char *shared_variable, char *replacement) {
 	return 0;
 }
 
-int create_daemon(void) {
-	/* Creates a daemon process and let's the calling process live
-	 * 
-	 * @return: returns parend pid for parent and 0 for daemon.
-	 */
-	// TODO ADD one more fork? - disable later TTY access
 
-	// Create new process which becomes daemon.
+/**
+ * Create_daemon():
+ * Forks a daemon process and leaves the original caller process alive.
+ * Fucntion's skeleton is borrowed from lecture materials.
+ * @Return: -1 on failure, 0 for child process and child's pid for parent.
+ *
+ *  |
+ * main
+ *  |
+ *  |......c1              fork()
+ *  |      .
+ *  |      .......c2       fork()
+ *  |      .      |
+ *  |      .      |
+ *  |      .      |
+ *  ⌄      .      ⌄
+ *
+ * Daemon (c2) is created by killing c1, thus detaching c2.
+ **/
+
+int create_daemon(void) {
 	switch(fork()) {
 		case 0: // Child. start making daemon.
-			
 			// Fork again to sever ties to parent.
 			switch (fork())  {
-				case 0:  break;     /* We're the child, ok. */
-				case -1: return -1; /* Fork failed! */
-				default: _exit(0);  /* Parent exits. */
+				case 0:  break;     // Child       (continue)
+				case -1: return -1; // Fork failed  (return)
+				default: _exit(0);  // Parent exits (detach)
 			}
 
 			printf("My pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
 
 			// Get a new session.
-			assert(setsid() > 0);               /* shouldn't fail */
+			assert(setsid() > 0);               // shouldn't fail
 
 			printf("Daemon my pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
 
@@ -181,22 +170,20 @@ int create_daemon(void) {
 				printf("Error! Cannot get current working directory\n");
 			}
 
-			/* Get to the root directory, just in case the current working
-			 * directory needs to be unmounted at some point. */
+			// Get to the root directory, just in case the current working
+			// directory needs to be unmounted at some point.
 			chdir("/");
 
-			/* Close all open files. */
+			// Close all open files.
 			closeall();
 
-			/* open /dev/null. As all fds are closed, the following open
-			 * will make stdin=/dev/null  */
+			// open /dev/null. As all fds are closed, the following open
+			// will make stdin=/dev/null
 			open("/dev/null",O_RDWR);
-			dup(0);  /* Copy /dev/null also as stdout stream */
-			dup(0);  /* Copy /dev/null also as stderr stream */
-
-			// Now we're a daemon, a lonely avenger fighting for the cause.
-			return 0;
-
+			dup(0);   // Copy /dev/null also as stdout stream
+			dup(0);   // Copy /dev/null also as stderr stream
+			return 0; // Now we have a daemon process, we can return.
+		
 		case -1: return -1; 					// Fork failed!
 		default: return(getpid());  	// Parent. Let it live.
 	}
@@ -212,11 +199,6 @@ void errexit(const char *str) {
 	exit(1);
 }
 
-/**
- * Sends a generic error message, not fatal. */
-void errreport(const char *str) {
-	syslog(LOG_INFO, "%s failed: %s (%d)", str, strerror(errno),errno);
-}
 
 /* This is the daemon's main work -- listen for messages and then do something */
 void process(void) {

@@ -1,25 +1,15 @@
-#define _XOPEN_SOURCE 700 //getline
+#ifndef LOGCUS_H
+#define LOGCUS_H 
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h> //sleep
-#include <string.h>
-#include "logcus.h" //currently linked in makefile
-#include <signal.h>
-
-//tmp includes
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <errno.h>
-#include <fcntl.h> //open()
-#include <sys/stat.h> //O_WRONLY
-#include <fcntl.h>  //O_
 #include <unistd.h>
-#include <syslog.h>
+#include <string.h>
+#include <signal.h>
 #include <time.h>
 #include <math.h>
-
-int processes_ready = 0;
+#include <syslog.h>
+#include "logcus.h"
 
  void sigint_handler(int sig) {
   (void) sig;
@@ -27,7 +17,6 @@ int processes_ready = 0;
   close_logcus();
   exit(0);
  }
-
 
  void sigterm_handler(int sig) {
   (void) sig;
@@ -91,6 +80,11 @@ int test_reaction_ability() {
 
 
 int test_process(pid_t pid){
+  /**
+   * Opens logcus and repeadetly spams the same log message.
+   * Process stuck in this function has to be terminated with signal.
+   * Used in test_simultaneous_process_response
+   **/
   if (open_logcus() < 0) {
     printf("Failed to open logcus!!!");
     exit(2);
@@ -106,24 +100,25 @@ int test_process(pid_t pid){
 
 int test_simultaneous_process_response() {
   /**
-   * This test forks new processes requested amount. All processes use
-   * logcus, thus stressing it and testing its capabilities.
+   * This test forks new processes, which use logcus for sending
+   * log messages, thus stressing testing the capabilities of logcus.
    *
-   * Notice that test stresses system with n+1 processes, because
-   * logcus is opened also in main. (This shouldn't effect to anything).
+   * Notice that the test stresses system with n+1 processes, because
+   * logcus is opened also in main.
    *
    * Function implementation:
-   * Child's pid value cannot be 0 when accessing to it from parent.
-   * For this reason, we can use our pid arrays last item as a flag.
-   * We set the value to 0 manually, and the value changes when final
-   * process is actually created. This way, the parent knows when it 
-   * can continue to next part in code (termination).
+   * Child's pid value cannot be 0 when accessing from parent.
+   * For this reason, we can use pid array's last item as a flag.
+   * We set the value to 0 manually, and when the value changes to
+   * actual pid, we know that all processes are created and parent 
+   * can contininue to next part in code.
    *
-   * Currently there is a small problem in the function. It doesn't 
+   * Currently there is a small problem with the function. It doesn't 
    * guarntee that the childs have enough time to open the logcus and 
-   * send message, since the function only checks that all childs are 
-   * created.
+   * send messages, since the function only checks that all childs are 
+   * created before moving to termination part.
    **/
+
   int n; // user defines n 
   printf("How many simultaneous processes you want to create?\n");
   scanf("%d", &n);
@@ -148,22 +143,18 @@ int test_simultaneous_process_response() {
     nanosleep((const struct timespec[]){{0, 100000}}, NULL);
   }
   
-
-  // I'm parent checking for 0
+  // Just wait
   while(pids[n] == 0) {
     sleep(1);
   }
-  //sleep(5);
-  // Test completed, childs alive. Do a clean exit.
+
+  // Test completed; all childs alive; do a clean exit.
   for(int i = 0; i < n+1; i++){
     kill(pids[i], SIGTERM);
   }
   return 0;
 }
 
-int test_average_latency() {
-  return 0;
-}
 
 int test_log_output() {
   /** 
@@ -182,17 +173,13 @@ int test_log_output() {
   return 0;
 }
 
-int test_millisecond_accuracy() {
-  /**
-   * This isn't very accurate test, but should be enough
-   * to demonstrate the millisecond precise logging ability.
-   **/
-  return 0;
-}
-
-
 
 int main(int argc, char *argv[]) {
+  /**
+   * Provides a command-line interface for running different
+   * tests from this file. './test' runs this function.
+   **/
+
   (void) argc;
   (void) argv;
   int select;
@@ -206,18 +193,14 @@ int main(int argc, char *argv[]) {
   printf("Please select a test by typing its number [1-4].\n");
   printf("1. test_reaction_ability\n");
   printf("2. test_simultaneous_process_response\n");
-  printf("3. test_average_latency\n");
-  printf("4. test_log_output\n");
-  printf("5. test_millisecond_accuracy\n");
+  printf("3. test_log_output\n");
   scanf("%d", &select);
 
   printf("\nStarting selected test\n\n");
   switch(select) {
     case 1: test_reaction_ability(); break;
     case 2: test_simultaneous_process_response(); break;
-    case 3: test_average_latency(); break;
-    case 4: test_log_output(); break;
-    case 5: test_millisecond_accuracy(); break;
+    case 3: test_log_output(); break;
     default: printf("Selection error, no such a test available.");
   }
 
@@ -225,3 +208,5 @@ int main(int argc, char *argv[]) {
   printf("No errors. Shutting down.\n");
   return 0;
 }
+
+#endif
