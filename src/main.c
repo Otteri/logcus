@@ -43,12 +43,12 @@ int main(int argc, char *argv[]) {
   while(run) {
     printf("main is running... [press ^C to stop]\n");
     signal(SIGINT, sigint_handler);
-    logcus("string sent from main.c program\n");
+    logcus("string sent from main.c program %s %s\n", "string 2", " string3");
     sleep(1);
     //usleep(3*1000);
     nanosleep(&ts, NULL);
   }
-  close_logcus();
+  //close_logcus();
   printf("...main terminating...\n");
   return 0;
 }

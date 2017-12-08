@@ -267,6 +267,7 @@ void process(void) {
 	// Close and remove temporary contents - do a clean exit.
 	syslog(LOG_INFO, "daemon is out of loop! -Closing\n");
 	remove(DAEMON_FIFO);
+	shm_unlink("/processes_using_logcus");
 	close(fd);
 	fclose(fp);
 	return;
@@ -276,7 +277,6 @@ void process(void) {
 void *entry_function(void *args) {
 	printf("Thread: entry function\n");
 	logcus_struct *args_ptr = args;
-	printf("pff: %d\n", args_ptr->tmp);
 	printf("pff1: %s\n", args_ptr->message);
 
 
@@ -347,6 +347,7 @@ int logcus(char *message, ...) {
 		fprintf(stderr, "ERROR! Cannot join threads\n");
 		return -1;
 	}
+	free(args->message);
 	free(args);
 
 	return 0;

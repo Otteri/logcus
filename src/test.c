@@ -85,7 +85,7 @@ int test_process(int process_number){
   while(1) {
     printf("process: %d\n", process_number);
     error("wut the fuck%s | %d\n", "homo",10);
-    logcus("Log message sent from test_process\n");
+    logcus("Log message sent from test_process_%d\n", process_number);
     sleep(3);
   }
   return 0;
@@ -95,6 +95,31 @@ int test_simultaneous_process_response() {
   /**
 
    **/
+  int is_ready = 0;
+  int n;
+  int i = 0;
+  printf("How many simultaneous processes you want to create?\n");
+  scanf("%d", &n);
+  pid_t pids[n];
+  for( ; i < n+1; i++){
+    if((pids[i] = fork()) < 0) {
+      perror("forking error\n");
+      abort();
+    }
+    else if (pids[i] == 0) {
+      test_process(i);
+      exit(0);
+    }
+  }
+  // Test completed, ask processes to exit.
+  if(i == n) {
+    for(int i = 1; i < n+1; i++){
+      kill(pids[i], SIGINT);
+    }
+  }
+
+
+  /*
   int n;
   printf("How many simultaneous processes you want to create?\n");
   scanf("%d", &n);
@@ -108,7 +133,7 @@ int test_simultaneous_process_response() {
       default: test_process(i);  // Parent
     }
     sleep(2);
-  }
+  }*/
 
   return 0;
 }
