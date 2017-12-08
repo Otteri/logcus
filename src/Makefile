@@ -1,7 +1,7 @@
 SRC_FILES=main.c logcus.c
 SRC_FILES2=test.c logcus.c
 
-all: main
+all: main test
 
 main: $(SRC_FILES)
 	gcc -g -Wall -Wextra -pedantic -std=c99 -o $@ $(SRC_FILES) -lpthread -lrt -lm

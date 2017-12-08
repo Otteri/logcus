@@ -99,25 +99,25 @@ int test_process(pid_t pid){
 }
 
 int test_simultaneous_process_response() {
-  /**
-   * This test forks new processes, which use logcus for sending
-   * log messages, thus stressing testing the capabilities of logcus.
-   *
-   * Notice that the test stresses system with n+1 processes, because
-   * logcus is opened also in main.
-   *
-   * Function implementation:
-   * Child's pid value cannot be 0 when accessing from parent.
-   * For this reason, we can use pid array's last item as a flag.
-   * We set the value to 0 manually, and when the value changes to
-   * actual pid, we know that all processes are created and parent 
-   * can contininue to next part in code.
-   *
-   * Currently there is a small problem with the function. It doesn't 
-   * guarntee that the childs have enough time to open the logcus and 
-   * send messages, since the function only checks that all childs are 
-   * created before moving to termination part.
-   **/
+ /**
+  * This test forks new processes, which use logcus for sending
+  * log messages, thus stressing testing the capabilities of logcus.
+  *
+  * Notice that the test stresses system with n+1 processes, because
+  * logcus is opened also in main.
+  *
+  * Function implementation:
+  * Child's pid value cannot be 0 when accessing from parent.
+  * For this reason, we can use pid array's last item as a flag.
+  * We set the value to 0 manually, and when the value changes to
+  * actual pid, we know that all processes are created and parent 
+  * can contininue to next part in code.
+  *
+  * Currently there is a small problem with the function. It doesn't 
+  * guarntee that the childs have enough time to open the logcus and 
+  * send messages, since the function only checks that all childs are 
+  * created before moving to termination part.
+  **/
 
   int n; // user defines n 
   printf("How many simultaneous processes you want to create?\n");
@@ -135,6 +135,7 @@ int test_simultaneous_process_response() {
     }
     else if (pids[i] == 0) {
       // CHILD!!!
+      printf("Created a process. Pid: %d\n", getpid());
       test_process(getpid());
     }
     // Let's give little time for child to open logcus
@@ -190,7 +191,7 @@ int main(int argc, char *argv[]) {
     exit(2);
   }
 
-  printf("Please select a test by typing its number [1-4].\n");
+  printf("PLEASE SELECT A TEST BY TYPING ITS NUMBER [1-3].\n");
   printf("1. test_reaction_ability\n");
   printf("2. test_simultaneous_process_response\n");
   printf("3. test_log_output\n");

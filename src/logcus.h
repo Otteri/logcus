@@ -1,3 +1,9 @@
+typedef struct {
+	pthread_mutex_t *lock;
+	char * message;
+} logcus_struct;
+
+
 char * concat(const char*, const char*);
 char * get_timestamp(void);
 char * to_string(int n);
@@ -15,10 +21,4 @@ int open_logcus(void);
 int close_logcus(void);
 
 void *entry_function();
-
-typedef struct {
-	pthread_mutex_t *lock;
-	char * message;
-} logcus_struct;
-
 

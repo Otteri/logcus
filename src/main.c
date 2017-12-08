@@ -17,11 +17,9 @@
 #include <unistd.h>
 #include <time.h>
 
-int run = 1;
 
  void sigint_handler(int sig) {
-  printf("Caught signal %d\n", sig);
-  printf("killing main process: %d.\n", getpid());
+  logcus("Caught signal: %d. Killing process\n", sig);
   close_logcus();
   exit(0);
  }
@@ -29,21 +27,17 @@ int run = 1;
 int main(int argc, char *argv[]) {
   (void) argc;
   (void) argv;
-
-  printf("My pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
+  signal(SIGINT, sigint_handler);
 	if (open_logcus() < 0) {
 		perror("daemon");
 		exit(2);
 	}
 
-
-  while(run) {
+  while(1) {
     printf("main is running... [press ^C to stop]\n");
-    signal(SIGINT, sigint_handler);
     logcus("string sent from %s program\n", "main.c");
     sleep(1);
   }
   close_logcus();
-  printf("...main terminating...\n");
   return 0;
 }

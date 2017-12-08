@@ -35,6 +35,10 @@ pthread_mutex_t LOCK;
 
 
 char * concat(const char *s1, const char *s2){
+ /**
+	* Function concatenates two strings togehter.
+	* Caller function must free the allocated memory.
+	**/
   char *result = malloc(strlen(s1)+strlen(s2)+2);
   strcpy(result, s1);
   strcat(result, s2);
@@ -42,7 +46,10 @@ char * concat(const char *s1, const char *s2){
 }
 
 char * to_string(int n) {
-  /* for normal ints, 12-chars should be enough. */
+ /**
+  * Converts a integer to a string.
+  * (For normal ints, 12-chars should be enough). 
+  **/
   static char str[12];
   sprintf(str, "%d", n);
   return str;
@@ -84,7 +91,11 @@ void closeall(void) {
 
 
 unsigned * create_shared_variable(const char *name) {
-
+	/**
+	* Creates a variable that can be shared between processes.
+	* On my system the variables are stored to /dev/shm/
+	* the variable needs to be freed by calling shm_unlink().
+	**/
 	int fd;
 	unsigned* addr;
 
@@ -103,7 +114,11 @@ unsigned * create_shared_variable(const char *name) {
 }
 
 unsigned * open_shared_variable(const char *name) {
-
+	/**
+	* Opens a memory shared variable with read and write permissions.
+	* @Return: -1 on error (e.g. invalid 'name'), otherwise the address
+	* of the variable.
+	**/
 	int fd;
 	unsigned* addr;
 
@@ -121,18 +136,6 @@ unsigned * open_shared_variable(const char *name) {
 	return addr;
 }
 
-int replace_shared_variable(char *shared_variable, char *replacement) {
-	/**
-	 * Readers-writer lock (RW):
-	 * Function is used for modifying the shared variable
-	 * We want to avoid possible race-conditions, so this
-	 * function should be called, when we want to change
-	 * shared recourse.
-	 **/
-	(void) shared_variable;
-	(void) replacement;
-	return 0;
-}
 
 
 /**
@@ -165,12 +168,8 @@ int create_daemon(void) {
 				default: _exit(0);  // Parent exits (detach)
 			}
 
-			printf("My pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
-
 			// Get a new session.
 			assert(setsid() > 0);               // shouldn't fail
-
-			printf("Daemon my pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
 
 			if(getcwd(CWD, sizeof(CWD)) == NULL){
 				printf("Error! Cannot get current working directory\n");
@@ -203,18 +202,18 @@ void errexit(const char *str) {
 }
 
 
-/* This is the daemon's main work -- listen for messages and then do something */
 void process(void) {
-	/** 
-	 * Daemon executes this function and does the work defined in here.
-	 * Daemon's job is to write given messages to a log file, which lies
-	 * in CUSTOM_LOG path. The messages are forwarded for the daemon through
-	 * a FIFO pipe. This ensures that the messages are logged correctly from
-	 * multiple sources, as long as the messages doesn't exceed the buffer size,
-	 * thus breaking the atomicity of the pipe. 
-	 *
-	 * Daemon stays in the loop until all processes close the logcus.
-	 **/
+ /** 
+	* Daemon executes this function and does the work defined in here.
+	* Daemon's job is to write given messages to a log file, which lies
+	* in CUSTOM_LOG path. The messages are forwarded for the daemon through
+	* a FIFO pipe. This ensures that the messages are logged correctly from
+	* multiple sources, as long as the messages doesn't exceed the buffer size,
+	* thus breaking the atomicity of the pipe. 
+	*
+	* Daemon stays active until all processes that has opened logcus by calling
+	* open_logcus(), also close the logcus by calling close_logcus().
+	**/
 	char str[1024];
 	FILE *fp;
 	int nbytes, fd;
@@ -223,7 +222,7 @@ void process(void) {
 	umask(0); // this could be in create_daemon
 	
 
-	// Open/create log file
+	// Open or create the log file
 	if(CUSTOM_LOG == NULL) {
 		char *full_path = concat(CWD, "/log.txt");
 		syslog(LOG_INFO,"full_path: %s\n", full_path);
@@ -241,9 +240,6 @@ void process(void) {
 		errexit("Failed to open FIFO");
 	}
 
-
-	syslog(LOG_INFO,"-DAEMON- My pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
-	
 	// Start processing
 	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	while(*processes_using_logcus > 0) {
@@ -257,7 +253,7 @@ void process(void) {
 		}
 	}
 	// Close and remove temporary contents - do a clean exit.
-	syslog(LOG_INFO, "daemon is out of loop! -Closing\n");
+	syslog(LOG_INFO, "Daemon is exiting\n");
 	remove(DAEMON_FIFO);
 	shm_unlink("/processes_using_logcus");
 	close(fd);
@@ -274,15 +270,14 @@ void *entry_function(void *args) {
 	
 	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	if(processes_using_logcus == NULL) {
-		fprintf(stderr, "Error! No daemon initalized. Have you called open_logcus?");
-		return (void *)-1;
+		errexit("Error! No daemon initalized. Have you called open_logcus?");
 	}
 	// No errors detected (yet) - write event to the log
 	char full_message[strlen(args_ptr->message)+33 * sizeof(char)]; // timestamp + pid + '\0' = 33
 	char *pid = to_string(getpid());
 	char *timestamp = get_timestamp();
 	if((sprintf(full_message, "%s [%s]: %s\n", timestamp, pid, args_ptr->message)) == -1) {
-		fprintf(stderr, "Error! Cannot form full log message. (Message might be over max 1024 bytes).");
+		fprintf(stderr, "Error! Cannot form full log message. (Message might be over the buffer).");
 		free(timestamp);
 		return (void *)-1;
 	}
@@ -291,7 +286,6 @@ void *entry_function(void *args) {
 	write(fd, full_message, strlen(full_message)+1);
 
 	pthread_mutex_unlock(args_ptr->lock);
-	
 	return 0;
 }
 
@@ -299,11 +293,10 @@ int logcus(char *message, ...) {
  /**
 	* First checks that daemon process is running by checking that shared variable
 	* (processes_using_logcus) exists. (The variable is created when daemon is initalized).
-	* After verifying that daemon exists, the message can be passed through FIFO to be
+	* After verifying that daemon exists, the message can be passed through the FIFO to be
 	* written in log file.
 	**/
 
-	/* daemon and writing process - shared recourse*/
 	pthread_t queuer;
 	char tmp[1024];
 
@@ -312,13 +305,10 @@ int logcus(char *message, ...) {
 	vsprintf(tmp, message, arguments);
 	va_end(arguments);
 
-
 	logcus_struct *args = malloc(sizeof(logcus_struct)); // move this? - don't want t
 	args->lock = &LOCK;
-
 	args->message = malloc(strlen(tmp)+1);
 	strcpy(args->message, tmp);
-
 
 	if(pthread_create(&queuer, NULL, entry_function, args)) {
 		free(args);
@@ -326,23 +316,21 @@ int logcus(char *message, ...) {
 		return -1;
 	}
 
-
 	if(pthread_join(queuer, NULL)) {
 		fprintf(stderr, "ERROR! Cannot join threads\n");
 		return -1;
 	}
 	free(args->message);
 	free(args);
-
 	return 0;
 }
 
 int open_logcus(void) {
-	/* Function checks if daemon process exists. If it does not, then we create one.
-   * Then we increment the memory shared variable by one to address that
-   * more processes are using the logcus.
-	 */
-
+	/** 
+	 * Function checks if daemon process exists. If it does not, then we create one.
+   * We always increment the memory shared variable by one to address that more
+   * processes are using the logcus.
+	 **/
 	unsigned *processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	// Check if logcus needs to be initalized (first call), and possibly initalize.
 	if(processes_using_logcus == NULL || *processes_using_logcus == 0) {
@@ -351,7 +339,6 @@ int open_logcus(void) {
 			fprintf(stderr, "\n mutex init failed\n");
 			return -1;
 		}
-
 		processes_using_logcus = create_shared_variable("/processes_using_logcus");
 		switch(create_daemon()) {
 			case 0:
@@ -361,9 +348,6 @@ int open_logcus(void) {
 			default: break;	 			// Original process can continue
 		}
 	}
-	//printf("active processes when opening: %d\n", *processes_using_logcus);
-	//*processes_using_logcus = 0; // just to be sure
-	// Always increment process counter by one, when this function is called.
 	processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	*processes_using_logcus += 1;
 	return 0;
