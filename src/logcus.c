@@ -232,10 +232,10 @@ void process(void) {
 	if(CUSTOM_LOG == NULL) {
 		char *full_path = concat(CWD, "/log.txt");
 		syslog(LOG_INFO,"full_path: %s\n", full_path);
-		fp = fopen(full_path, "w+");
+		fp = fopen(full_path, "a+"); //w+ for debug
 		free(full_path);
 	} else {
-		fp = fopen(CUSTOM_LOG, "w+");
+		fp = fopen(CUSTOM_LOG, "a+");
 	}
 
 	// Create FIFO connection
@@ -272,7 +272,6 @@ void process(void) {
 
 
 void *entry_function(void *args) {
-	printf("Thread: entry function\n");
 	logcus_struct *args_ptr = args;
 
 	pthread_mutex_lock(args_ptr->lock);
@@ -281,7 +280,7 @@ void *entry_function(void *args) {
 	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
 	if(processes_using_logcus == NULL) {
 		fprintf(stderr, "Error! No daemon initalized. Have you called open_logcus?");
-		//return -1;
+		return (void *)-1;
 	}
 	// No errors detected (yet) - write event to the log
 	char full_message[strlen(args_ptr->message)+33 * sizeof(char)]; // timestamp + pid + '\0' = 33
@@ -290,7 +289,7 @@ void *entry_function(void *args) {
 	if((sprintf(full_message, "%s [%s]: %s\n", timestamp, pid, args_ptr->message)) == -1) {
 		fprintf(stderr, "Error! Cannot form full log message. (Message might be over max 1024 bytes).");
 		free(timestamp);
-		//return -1;
+		return (void *)-1;
 	}
 	free(timestamp);
 	int fd = open(DAEMON_FIFO, O_WRONLY);

@@ -19,16 +19,22 @@
 #include <time.h>
 #include <math.h>
 
-
-int run = 1;
+int processes_ready = 0;
 
  void sigint_handler(int sig) {
-  printf("Caught signal %d\n", sig);
-  printf("killing main process: %d.\n", getpid());
+  (void) sig;
+  //printf("Caught signal %d\n", sig);
+  //printf("killing main process: %d.\n", getpid());
+  logcus("Shutting down %d.\n", getpid());
   close_logcus();
   exit(0);
  }
 
+void sigusr1_handler(int sig) {
+  printf("Catched sigurs\n");
+  processes_ready++;
+  printf("catched sigusr1 %d\n", processes_ready);
+}
 
 
 int test_reaction_ability() {
@@ -78,63 +84,80 @@ int test_reaction_ability() {
 }
 
 
-int test_process(int process_number){
+int test_process(pid_t pid, pid_t original_process, int n){
   if (open_logcus() < 0) {
+    printf("Failed to open logcus!!!");
     exit(2);
   }
-  while(1) {
-    printf("process: %d\n", process_number);
-    error("wut the fuck%s | %d\n", "homo",10);
-    logcus("Log message sent from test_process_%d\n", process_number);
-    sleep(3);
+  printf("Created a new process \n");
+  logcus("Created process: %d\n", pid);
+  syslog(LOG_INFO, "Created process: %d\n", pid);
+
+
+  while(processes_ready != n) {
+    printf("process: %d\n", pid);
+    //logcus("Log message sent from test_process_%d\n", pid);
+    //signal(SIGUSR1, sigusr1_handler);
+    //printf("sending signal to: %d\n", original_process);
+    signal(SIGINT, sigint_handler);
+    kill(original_process, SIGUSR1);
+    sleep(1);
   }
+  close_logcus();
   return 0;
 }
 
 int test_simultaneous_process_response() {
   /**
-
+   * Test forks new processes requested amount. All processes use
+   * logcus, thus stressing it and testing its capabilities.
+   *
+   * Notice that test stresses system with n+1 processes, because
+   * logcus is opened also in main. (This shouldn't effect to anything).
+   *
+   * Function implementation:
+   * Child's pid value cannot be 0 when accessing to it from parent.
+   * For this reason, we can use our pid arrays last item as a flag.
+   * We set the value to 0 manually, and the value changes when final
+   * process is actually created. This way, the parent knows when it 
+   * can continue to next part in code (termination).
+   * Communication is done with signals.
    **/
-  int is_ready = 0;
-  int n;
-  int i = 0;
+  int n; // user defines n 
   printf("How many simultaneous processes you want to create?\n");
   scanf("%d", &n);
   pid_t pids[n];
-  for( ; i < n+1; i++){
+  pids[n] = 0; // set flag
+  printf("MY PID IS: %d\n", getpid());
+  pid_t original_process = getpid();
+  // Create processes
+  for(int i=1; i < n+1; i++){
     if((pids[i] = fork()) < 0) {
+      logcus("Forking failed: %d\n", getpid());
       perror("forking error\n");
       abort();
     }
     else if (pids[i] == 0) {
-      test_process(i);
-      exit(0);
+      test_process(getpid(), original_process, n);
     }
+    //sleep(1);
   }
-  // Test completed, ask processes to exit.
-  if(i == n) {
-    for(int i = 1; i < n+1; i++){
-      kill(pids[i], SIGINT);
-    }
+  sleep(1);
+  
+  // Original process waits
+  while(processes_ready != n) { //pids[n] == 0
+    signal(SIGUSR1, sigusr1_handler);
+    printf("My pid: %d\n", getpid());
+    printf("processes_ready: %d and n: %d \n", processes_ready, n);
+    //sleep(2);
   }
-
-
-  /*
-  int n;
-  printf("How many simultaneous processes you want to create?\n");
-  scanf("%d", &n);
-  logcus("Starting test\n");
+  // Test completed, childs alive. Do a clean exit.
   for(int i = 1; i < n+1; i++){
-   
-    printf("simultaneous processes currently: %d\n", i);
-    switch (fork()) {
-      case 0:  break;//logcus("Log message sent from test1.c program\n");  // Child
-      case -1: return -1; 
-      default: test_process(i);  // Parent
-    }
-    sleep(2);
-  }*/
-
+    printf("processes_ready: %d\n", processes_ready);
+    printf("pids wat: %d\n", pids[i]);
+    kill(pids[i], SIGINT);
+    //sleep(1);
+  }
   return 0;
 }
 
@@ -143,11 +166,12 @@ int test_average_latency() {
 }
 
 int test_log_output() {
-  /*Open syslog daemon and log.txt and compare results visually.
-    I didn't want to have exact same format in my log, so its 
-    better just to check correcpondece instead of writing 
-    'assertqeual tests'.
-  */
+  /** 
+   * Open syslog daemon and log.txt and compare results visually.
+   * I didn't want to have exact same format in my log, so its 
+   * better just to check the correspondece visually instead of 
+   * writing tests here (...and I'm feeling sleepy now).
+   **/
   openlog("my_daemon", LOG_PID, LOG_DAEMON);
   for(int i = 0; i <= 5; i++) {
     printf("test_log_output running (%d/5) [pid: %d]\n", i,getpid());
@@ -173,6 +197,7 @@ int main(int argc, char *argv[]) {
   (void) argv;
   int select;
   signal(SIGINT, sigint_handler);
+  signal(SIGUSR1, sigusr1_handler);
 
   if (open_logcus() < 0) {
     exit(2);

@@ -29,9 +29,6 @@ int run = 1;
 int main(int argc, char *argv[]) {
   (void) argc;
   (void) argv;
-  struct timespec ts;
-  ts.tv_sec = 0;
-  ts.tv_nsec = 100000000;
 
   printf("My pid %d, my ppid %d, my gpid %d\n",getpid(),getppid(),getpgrp());
 	if (open_logcus() < 0) {
@@ -43,12 +40,10 @@ int main(int argc, char *argv[]) {
   while(run) {
     printf("main is running... [press ^C to stop]\n");
     signal(SIGINT, sigint_handler);
-    logcus("string sent from main.c program %s %s\n", "string 2", " string3");
+    logcus("string sent from %s program\n", "main.c");
     sleep(1);
-    //usleep(3*1000);
-    nanosleep(&ts, NULL);
   }
-  //close_logcus();
+  close_logcus();
   printf("...main terminating...\n");
   return 0;
 }
