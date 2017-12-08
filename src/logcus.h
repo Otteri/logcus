@@ -19,7 +19,6 @@ void *entry_function();
 typedef struct {
 	pthread_mutex_t *lock;
 	char * message;
-	int tmp;
 } logcus_struct;
 
 

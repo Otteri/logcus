@@ -1,3 +1,5 @@
+#ifndef LOGCUS_H
+#define LOGCUS_H 
 #define _XOPEN_SOURCE 700 //ftruncate()
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,21 +16,16 @@
 #include <math.h>
 #include <time.h>
 #include <pthread.h>
-
-#include "logcus.h"
-
 #include <stdarg.h>
-
-/*
-#ifndef logcus.h
-#define <logcus.h>
-#endif
-*/
+#include "logcus.h"
 
 #define DAEMON_FIFO "/tmp/daemon_fifo"
 #define CUSTOM_LOG  NULL
 char CWD[1024]; //logcus initalizer working directory
 pthread_mutex_t LOCK;
+
+
+
 
 
 char * concat(const char *s1, const char *s2){
@@ -150,8 +147,8 @@ int replace_shared_variable(char *shared_variable, char *replacement) {
 	 * function should be called, when we want to change
 	 * shared recourse.
 	 **/
-
-
+	(void) shared_variable;
+	(void) replacement;
 	return 0;
 }
 
@@ -277,11 +274,8 @@ void process(void) {
 void *entry_function(void *args) {
 	printf("Thread: entry function\n");
 	logcus_struct *args_ptr = args;
-	printf("pff1: %s\n", args_ptr->message);
-
 
 	pthread_mutex_lock(args_ptr->lock);
-	//&args.message;
 
 	
 	unsigned * processes_using_logcus = open_shared_variable("/processes_using_logcus");
@@ -323,13 +317,9 @@ int logcus(char *message, ...) {
 	va_start(arguments, message);
 	vsprintf(tmp, message, arguments);
 	va_end(arguments);
-	//fprintf(stdout, "\n");
-	printf("sprintf: %s\n", tmp);
-	//printf("vprintf: %s\n", tmp);
+
 
 	logcus_struct *args = malloc(sizeof(logcus_struct)); // move this? - don't want t
-	//args->tmp = 0;
-	
 	args->lock = &LOCK;
 
 	args->message = malloc(strlen(tmp)+1);
@@ -411,3 +401,4 @@ int close_logcus(void) {
 	return 0;
 }
 
+#endif
