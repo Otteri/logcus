@@ -24,7 +24,13 @@
 char CWD[1024]; 				 // Working directory of logcus initalizer.
 pthread_mutex_t LOCK;
 
-
+ /*===================================================*\
+  |"Library" provides the following functions for user |
+  | 																									 |
+  |									open_logcus(void)									 |
+  | 								logcus(char*, ...)								 |
+  | 								close_logcus(void)								 |
+ \*===================================================*/
 
 
 
@@ -190,10 +196,7 @@ int create_daemon(void) {
 }
 
 
-/* No STDOUT anymore, we use syslog to report things */
-
-/**
- * Reports a terminal error (and quits). */
+/* Reports a terminal error (and quits). */
 void errexit(const char *str) {
 	syslog(LOG_INFO, "%s failed: %s (%d)", str, strerror(errno),errno);
 	exit(1);
@@ -202,12 +205,22 @@ void errexit(const char *str) {
 
 /* This is the daemon's main work -- listen for messages and then do something */
 void process(void) {
+	/** 
+	 * Daemon executes this function and does the work defined in here.
+	 * Daemon's job is to write given messages to a log file, which lies
+	 * in CUSTOM_LOG path. The messages are forwarded for the daemon through
+	 * a FIFO pipe. This ensures that the messages are logged correctly from
+	 * multiple sources, as long as the messages doesn't exceed the buffer size,
+	 * thus breaking the atomicity of the pipe. 
+	 *
+	 * Daemon stays in the loop until all processes close the logcus.
+	 **/
 	char str[1024];
 	FILE *fp;
 	int nbytes, fd;
 
 	openlog("my_daemon", LOG_PID, LOG_DAEMON);
-	umask(0); //here?
+	umask(0); // this could be in create_daemon
 	
 
 	// Open/create log file
