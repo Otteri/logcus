@@ -18,13 +18,10 @@ Notice that makefile includes also other useful functionalities. 'Make clean' de
 ## Example function calls:
 Simply run the main executable in src folder. You should give file path(s) to code file(s) that you want to be cleaned. It is also possible to give some option parameters, but currently the program simply skips these.
 
-open_logcus();
-logcus("Example message1\n");
-logcus("I can be formatted in similar way as %s or %s\n", "fprintf", "syslog");
-logcus("I take variable amount of arguments\n");
-logcus("My weakness is that I currently write only to one log file\n");
-logcus("REMEMBER ALWAYS TO CLOSE LOGCUS AFTER USE!\n");
-close_logcus();
-
-
-
+open_logcus();  
+logcus("Example message1\n");  
+logcus("I can be formatted in similar way as %s or %s\n", "fprintf", "syslog");  
+logcus("I take variable amount of arguments\n");  
+logcus("My weakness is that I currently write only to one log file\n");  
+logcus("REMEMBER ALWAYS TO CLOSE LOGCUS AFTER USE!\n");  
+close_logcus();  
