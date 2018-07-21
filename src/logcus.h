@@ -1,3 +1,23 @@
+#ifndef LOGCUS_H
+#define LOGCUS_H
+#define _XOPEN_SOURCE 700 // ftruncate()
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <syslog.h>
+#include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <assert.h>
+#include <math.h>
+#include <time.h>
+#include <pthread.h>
+#include <stdarg.h>
+
 typedef struct {
 	pthread_mutex_t *lock;
 	char * message;
@@ -21,4 +41,4 @@ int open_logcus(void);
 int close_logcus(void);
 
 void *entry_function();
-
+#endif

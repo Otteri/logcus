@@ -1,15 +1,4 @@
-#ifndef LOGCUS_H
-#define LOGCUS_H 
-#define _XOPEN_SOURCE 700
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <signal.h>
-#include <time.h>
-#include <math.h>
-#include <syslog.h>
-#include "logcus.h"
+ #include "test.h"
 
  void sigint_handler(int sig) {
   (void) sig;
@@ -25,22 +14,20 @@
   exit(0);
  }
 
-
+///////////////////////////////////////////////////////////////////////////////
+// Function tests logcus' reaction time by sending log messages
+// with decreasing intervals. Function starts from one second
+// and loops until logcus crashes or message interval meets 1000ns.
+// It makes no sense to test under 1000ns response, because the results
+// wouldn't be very accurate due to implementation of this function and
+// because the standards/hardware cannot guarntee nanosecond accuracy.
+// --------------------------------------------------------------------
+// It seems that the logcus goes through this test without problems,
+// so basically the test just prove that the logcus can work quite
+// fast. The function peak is around 6 messages in 0.01 ms, so
+// 1000ns should be quite good limit. The limit in for loop can be
+// changed to another.
 int test_reaction_ability() {
- /**
-  * Function tests logcus' reaction time by sending log messages
-  * with decreasing intervals. Function starts from one second
-  * and loops until logcus crashes or message interval meets 1000ns.
-  * It makes no sense to test under 1000ns response, because the results
-  * wouldn't be very accurate due to implementation of this function and
-  * because the standards/hardware cannot guarntee nanosecond accuracy.
-  * --------------------------------------------------------------------
-  * It seems that the logcus goes through this test without problems,
-  * so basically the test just prove that the logcus can work quite
-  * fast. The function peak is around 6 messages in 0.01 ms, so
-  * 1000ns should be quite good limit. The limit in for loop can be
-  * changed to another.
-  **/
   int ret = 0;
   struct timespec ts;
   ts.tv_sec = 0;
@@ -78,13 +65,10 @@ int test_reaction_ability() {
   return 0;
 }
 
-
+// Opens logcus and repeadetly spams the same log message.
+// Process stuck in this function has to be terminated with signal.
+// Used in test_simultaneous_process_response
 int test_process(pid_t pid){
-  /**
-   * Opens logcus and repeadetly spams the same log message.
-   * Process stuck in this function has to be terminated with signal.
-   * Used in test_simultaneous_process_response
-   **/
   if (open_logcus() < 0) {
     printf("Failed to open logcus!!!");
     exit(2);
@@ -98,27 +82,26 @@ int test_process(pid_t pid){
   return 0; //never getting here
 }
 
-int test_simultaneous_process_response() {
- /**
-  * This test forks new processes, which use logcus for sending
-  * log messages, thus stressing testing the capabilities of logcus.
-  *
-  * Notice that the test stresses system with n+1 processes, because
-  * logcus is opened also in main.
-  *
-  * Function implementation:
-  * Child's pid value cannot be 0 when accessing from parent.
-  * For this reason, we can use pid array's last item as a flag.
-  * We set the value to 0 manually, and when the value changes to
-  * actual pid, we know that all processes are created and parent 
-  * can contininue to next part in code.
-  *
-  * Currently there is a small problem with the function. It doesn't 
-  * guarntee that the childs have enough time to open the logcus and 
-  * send messages, since the function only checks that all childs are 
-  * created before moving to termination part.
-  **/
 
+///////////////////////////////////////////////////////////////////////////////
+// This test forks new processes, which use logcus for sending
+// log messages, thus stressing testing the capabilities of logcus.
+//
+// Notice that the test stresses system with n+1 processes, because
+// logcus is opened also in main.
+//
+// Function implementation:
+// Child's pid value cannot be 0 when accessing from parent.
+// For this reason, we can use pid array's last item as a flag.
+// We set the value to 0 manually, and when the value changes to
+// actual pid, we know that all processes are created and parent 
+// can contininue to next part in code.
+//
+// Currently there is a small problem with the function. It doesn't 
+// guarntee that the childs have enough time to open the logcus and 
+// send messages, since the function only checks that all childs are 
+// created before moving to termination part.
+int test_simultaneous_process_response() {
   int n; // user defines n 
   printf("How many simultaneous processes you want to create?\n");
   scanf("%d", &n);
@@ -157,13 +140,11 @@ int test_simultaneous_process_response() {
 }
 
 
+// Open syslog daemon and log.txt and compare results visually.
+// I didn't want to have exact same format in my log, so its 
+// better just to check the correspondece visually instead of 
+// writing tests here (...and I'm feeling sleepy now).
 int test_log_output() {
-  /** 
-   * Open syslog daemon and log.txt and compare results visually.
-   * I didn't want to have exact same format in my log, so its 
-   * better just to check the correspondece visually instead of 
-   * writing tests here (...and I'm feeling sleepy now).
-   **/
   openlog("my_daemon", LOG_PID, LOG_DAEMON);
   for(int i = 0; i <= 5; i++) {
     printf("test_log_output running (%d/5) [pid: %d]\n", i,getpid());
@@ -175,12 +156,9 @@ int test_log_output() {
 }
 
 
+// Provides a command-line interface for running different
+// tests from this file. './test' runs this function.
 int main(int argc, char *argv[]) {
-  /**
-   * Provides a command-line interface for running different
-   * tests from this file. './test' runs this function.
-   **/
-
   (void) argc;
   (void) argv;
   int select;
@@ -209,5 +187,3 @@ int main(int argc, char *argv[]) {
   printf("No errors. Shutting down.\n");
   return 0;
 }
-
-#endif
