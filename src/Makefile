@@ -9,7 +9,7 @@ main: $(SRC_FILES)
 clean:
 	rm -f main
 	rm -f test
-	> msg.log
+	> log.txt
 
 memcheck:
 	valgrind --leak-check=full ./main example.c

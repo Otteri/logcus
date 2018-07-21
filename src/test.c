@@ -169,17 +169,17 @@ int main(int argc, char *argv[]) {
     exit(2);
   }
 
-  printf("PLEASE SELECT A TEST BY TYPING ITS NUMBER [1-3].\n");
-  printf("1. test_reaction_ability\n");
-  printf("2. test_simultaneous_process_response\n");
-  printf("3. test_log_output\n");
+  printf("PLEASE SELECT A TEST BY TYPING ITS NUMBER:\n");
+  printf("[1] test_reaction_ability\n");
+  printf("[2] test_log_output\n");
+  //printf("3. test_simultaneous_process_response\n");
   scanf("%d", &select);
 
   printf("\nStarting selected test\n\n");
   switch(select) {
     case 1: test_reaction_ability(); break;
-    case 2: test_simultaneous_process_response(); break;
-    case 3: test_log_output(); break;
+    case 2: test_log_output(); break;
+    //case 3: test_simultaneous_process_response(); break;
     default: printf("Selection error, no such a test available.");
   }
 

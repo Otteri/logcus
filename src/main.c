@@ -1,22 +1,5 @@
-#define _XOPEN_SOURCE 700 //getline
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h> //sleep
-#include <string.h>
-#include "logcus.h" //currently linked in makefile
 #include <signal.h>
-
-//tmp includes
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <errno.h>
-#include <fcntl.h> //open()
-#include <sys/stat.h> //O_WRONLY
-#include <fcntl.h>  //O_
-#include <unistd.h>
-#include <time.h>
-
+#include "logcus.h"
 
 void sigint_handler(int sig) {
 	logcus("Caught signal: %d. Killing process\n", sig);
